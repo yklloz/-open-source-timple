@@ -1,0 +1,16 @@
+{
+  "expo": {
+    "name": "SignBridge",
+    "slug": "signbridge",
+    "version": "1.0.0",
+    "scheme": "signbridge",
+    "platforms": ["ios", "android", "web"],
+    "web": {
+      "bundler": "metro",
+      "output": "single"
+    },
+    "plugins": [
+      "expo-router"
+    ]
+  }
+}
