@@ -1,0 +1,16 @@
+{
+  "expo": {
+    "name": "손이음",
+    "slug": "signbridge",
+    "version": "1.0.0",
+    "scheme": "signbridge",
+    "platforms": ["ios", "android", "web"],
+    "web": {
+      "bundler": "metro",
+      "output": "single"
+    },
+    "plugins": [
+      "expo-router"
+    ]
+  }
+}

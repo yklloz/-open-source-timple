@@ -1,0 +1,24 @@
+# Secrets
+yk_hanium/**/.env
+yk_hanium/**/.env.*
+!yk_hanium/**/.env.example
+
+# Python backend
+yk_hanium/yk_backend/.venv/
+yk_hanium/yk_backend/venv/
+yk_hanium/yk_backend/__pycache__/
+yk_hanium/yk_backend/**/*.pyc
+yk_hanium/yk_backend/*.db
+yk_hanium/yk_backend/*.sqlite
+yk_hanium/yk_backend/*.sqlite3
+yk_hanium/yk_backend/*.log
+
+# Frontend
+yk_hanium/yk_frontend/node_modules/
+yk_hanium/yk_frontend/.expo/
+yk_hanium/yk_frontend/dist/
+yk_hanium/yk_frontend/web-build/
+yk_hanium/yk_frontend/ios/
+yk_hanium/yk_frontend/android/
+yk_hanium/yk_frontend/*.log
+yk_hanium/yk_frontend/*.tsbuildinfo
