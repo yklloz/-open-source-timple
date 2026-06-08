@@ -1,16 +1,21 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
+export type ReviewDifficulty = 'easy' | 'normal' | 'hard';
+
 export interface AppSettings {
   largeCaption: boolean;
   highContrast: boolean;
   autoSpeak: boolean;
   learningAlert: boolean;
+  learningReminderTime: string;
   saveHistory: boolean;
   defaultTranslationMode: 'sign_to_text' | 'text_to_sign';
   dailyGoal: number;
   themeMode: 'light' | 'dark';
   profileName: string;
   loginLabel: string;
+  profileImageUri: string;
+  reviewDifficulty: ReviewDifficulty;
 }
 
 const SETTINGS_KEY = 'signbridge_settings_v1';
@@ -20,13 +25,16 @@ export const defaultSettings: AppSettings = {
   largeCaption: true,
   highContrast: false,
   autoSpeak: true,
-  learningAlert: true,
+  learningAlert: false,
+  learningReminderTime: '20:00',
   saveHistory: false,
   defaultTranslationMode: 'sign_to_text',
   dailyGoal: 90,
   themeMode: 'light',
   profileName: 'Jay',
   loginLabel: 'Gmail 계정으로 로그인됨',
+  profileImageUri: '',
+  reviewDifficulty: 'normal',
 };
 
 let settingsState: AppSettings = defaultSettings;

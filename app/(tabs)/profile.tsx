@@ -55,6 +55,27 @@ function buildWords(progress: ProgressState): WordItem[] {
   return merged;
 }
 
+function shouldExposeForReview(item: WordItem, isMastered: boolean, difficulty: AppSettings['reviewDifficulty']) {
+  if (isMastered) return false;
+  if (difficulty === 'easy') return item.status === '복습';
+  if (difficulty === 'normal') return item.status === '복습' || item.status === '학습중';
+  return item.status !== '완료';
+}
+
+function reviewPriority(item: WordItem, isMastered: boolean, difficulty: AppSettings['reviewDifficulty']) {
+  if (isMastered) return 4;
+  if (item.status === '복습') return 0;
+  if (difficulty === 'hard' && item.status === '학습중') return 1;
+  if (difficulty === 'normal' && item.status === '학습중') return 2;
+  return 3;
+}
+
+function difficultyLabel(value: AppSettings['reviewDifficulty']) {
+  if (value === 'easy') return '쉬움';
+  if (value === 'hard') return '어려움';
+  return '보통';
+}
+
 function WordRow({
   item,
   userState,
@@ -150,14 +171,20 @@ export default function WordLearningScreen() {
       const matchesQuery = !normalized || item.word.toLowerCase().includes(normalized) || item.desc.toLowerCase().includes(normalized) || item.tag.toLowerCase().includes(normalized);
       const matchesFilter =
         filter === 'all' ||
-        (filter === 'review' && item.status === '복습' && !isMastered) ||
+        (filter === 'review' && shouldExposeForReview(item, isMastered, settings.reviewDifficulty)) ||
         (filter === 'bookmarked' && state.bookmarked) ||
         (filter === 'mastered' && isMastered);
       return matchesQuery && matchesFilter;
+    }).sort((a, b) => {
+      const aState = wordState[a.word] || {};
+      const bState = wordState[b.word] || {};
+      const aMastered = Boolean(aState.mastered) || a.status === '완료';
+      const bMastered = Boolean(bState.mastered) || b.status === '완료';
+      return reviewPriority(a, aMastered, settings.reviewDifficulty) - reviewPriority(b, bMastered, settings.reviewDifficulty);
     });
-  }, [filter, query, wordState, words]);
+  }, [filter, query, settings.reviewDifficulty, wordState, words]);
 
-  const reviewCount = words.filter(item => item.status === '복습' && !wordState[item.word]?.mastered).length;
+  const reviewCount = words.filter(item => shouldExposeForReview(item, Boolean(wordState[item.word]?.mastered) || item.status === '완료', settings.reviewDifficulty)).length;
   const bookmarkCount = words.filter(item => wordState[item.word]?.bookmarked).length;
   const masteredCount = words.filter(item => wordState[item.word]?.mastered || item.status === '완료').length;
   const firstActiveLessonId = words.find(item => item.status !== '완료')?.lessonId || words[0]?.lessonId || 'l-1';
@@ -208,7 +235,7 @@ export default function WordLearningScreen() {
 
         <View style={styles.notice}>
           <Text style={styles.noticeLabel}>목표</Text>
-          <Text style={styles.noticeText}>오늘의 퀴즈 목표 점수는 {settings.dailyGoal}점이에요.</Text>
+          <Text style={styles.noticeText}>오늘 목표 {settings.dailyGoal}점 · 복습 난이도 {difficultyLabel(settings.reviewDifficulty)}</Text>
         </View>
 
         <View style={[styles.wordList, dark && styles.listDark]}>

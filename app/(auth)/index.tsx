@@ -1,8 +1,10 @@
 import { useState } from 'react';
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, KeyboardAvoidingView, Platform, Alert } from 'react-native';
 import { router } from 'expo-router';
-import { login, setToken } from '@/src/api';
+import { setToken } from '@/src/api';
 import { loginWithKakao } from '@/src/api/kakao';
+import { loginLocalUser } from '@/src/store/authStore';
+import { saveSettings } from '@/src/store/settingsStore';
 
 const COLORS = { primary: '#1E88F5', bg: '#F3F8FE', card: '#FFFFFF', text: '#20242A', sub: '#748092', line: '#E7EEF8', kakao: '#FEE500' };
 
@@ -10,6 +12,7 @@ export default function LoginScreen() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
+  const [errorMessage, setErrorMessage] = useState('');
 
   const enterDemo = () => router.replace('/(tabs)/learn');
 
@@ -30,15 +33,24 @@ export default function LoginScreen() {
   };
 
   const handleLogin = async () => {
-    if (!email || !password) return enterDemo();
+    setErrorMessage('');
+
+    if (!email.trim() || !password) {
+      setErrorMessage('이메일과 비밀번호를 모두 입력해 주세요.');
+      Alert.alert('로그인 필요', '이메일과 비밀번호를 모두 입력해 주세요.');
+      return;
+    }
+
     setLoading(true);
     try {
-      const data = await login(email, password);
-      setToken(data.access_token);
+      const user = await loginLocalUser(email, password);
+      setToken(`local-${user.email}`);
+      await saveSettings({ profileName: user.name, loginLabel: `${user.email} 계정으로 로그인됨` });
       router.replace('/(tabs)/learn');
     } catch (e: any) {
-      Alert.alert('데모 모드', '로그인 서버 없이 화면을 확인합니다.');
-      enterDemo();
+      const message = e.message || '회원가입한 계정만 로그인할 수 있어요.';
+      setErrorMessage(message);
+      Alert.alert('로그인 실패', message);
     } finally {
       setLoading(false);
     }
@@ -57,13 +69,18 @@ export default function LoginScreen() {
         <Text style={styles.cardTitle}>로그인</Text>
         <TextInput style={styles.input} placeholder="이메일" placeholderTextColor="#A7B0BE" value={email} onChangeText={setEmail} keyboardType="email-address" autoCapitalize="none" />
         <TextInput style={styles.input} placeholder="비밀번호" placeholderTextColor="#A7B0BE" value={password} onChangeText={setPassword} secureTextEntry />
+        {errorMessage ? (
+          <View style={styles.errorBox}>
+            <Text style={styles.errorText}>{errorMessage}</Text>
+          </View>
+        ) : null}
         <TouchableOpacity style={styles.primaryBtn} onPress={handleLogin} activeOpacity={0.9}>
           <Text style={styles.primaryText}>{loading ? '로그인 중...' : '로그인'}</Text>
         </TouchableOpacity>
 
         <View style={styles.dividerRow}><View style={styles.divider} /><Text style={styles.dividerText}>또는</Text><View style={styles.divider} /></View>
 
-        <TouchableOpacity style={styles.socialBtn} onPress={enterDemo} activeOpacity={0.85}>
+        <TouchableOpacity style={styles.socialBtn} onPress={() => Alert.alert('준비 중', 'Gmail 로그인은 추후 연동 예정이에요. 회원가입 후 이메일/비밀번호로 로그인해 주세요.')} activeOpacity={0.85}>
           <View style={styles.socialMark}><Text style={styles.socialMarkText}>G</Text></View>
           <Text style={styles.socialText}>Gmail로 계속하기</Text>
         </TouchableOpacity>
@@ -91,6 +108,8 @@ const styles = StyleSheet.create({
   card: { backgroundColor: COLORS.card, borderRadius: 28, padding: 22, gap: 12, shadowColor: '#B9D6F2', shadowOpacity: .28, shadowRadius: 24, shadowOffset: { width: 0, height: 14 }, elevation: 9 },
   cardTitle: { fontSize: 22, fontWeight: '900', color: COLORS.text, marginBottom: 4 },
   input: { height: 54, borderRadius: 15, backgroundColor: '#F8FAFD', borderWidth: 1, borderColor: COLORS.line, paddingHorizontal: 16, color: COLORS.text, fontWeight: '700' },
+  errorBox: { backgroundColor: '#FFF0F3', borderWidth: 1, borderColor: '#F8B8C4', borderRadius: 14, paddingHorizontal: 14, paddingVertical: 12 },
+  errorText: { color: '#D83A56', fontSize: 13, fontWeight: '900', lineHeight: 18 },
   primaryBtn: { height: 56, borderRadius: 999, backgroundColor: COLORS.primary, alignItems: 'center', justifyContent: 'center', marginTop: 4 },
   primaryText: { color: '#fff', fontWeight: '900', fontSize: 16 },
   dividerRow: { flexDirection: 'row', alignItems: 'center', gap: 12, marginVertical: 4 },

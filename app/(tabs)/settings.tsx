@@ -1,5 +1,5 @@
 import { useCallback, useRef, useState } from 'react';
-import { Modal, ScrollView, View, Text, TextInput, TouchableOpacity, StyleSheet, Switch } from 'react-native';
+import { Alert, Image, Modal, Platform, ScrollView, View, Text, TextInput, TouchableOpacity, StyleSheet, Switch } from 'react-native';
 import { useFocusEffect } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -51,6 +51,32 @@ function SettingRow({
 
 function Divider() {
   return <View style={styles.divider} />;
+}
+
+const REMINDER_TIMES = ['09:00', '12:00', '18:00', '20:00', '21:00'];
+const DIFFICULTY_OPTIONS = [
+  { value: 'easy', label: '쉬움', desc: '복습 단어만 가볍게 보여줘요.' },
+  { value: 'normal', label: '보통', desc: '복습 단어와 미완료 단어를 균형 있게 보여줘요.' },
+  { value: 'hard', label: '어려움', desc: '미완료 단어까지 자주 노출해요.' },
+] as const;
+
+function nextReminderTime(current: string) {
+  const index = REMINDER_TIMES.indexOf(current);
+  return REMINDER_TIMES[(index + 1) % REMINDER_TIMES.length];
+}
+
+function nextDifficulty(current: AppSettings['reviewDifficulty']) {
+  const values = DIFFICULTY_OPTIONS.map(item => item.value);
+  const index = values.indexOf(current);
+  return values[(index + 1) % values.length];
+}
+
+function difficultyLabel(value: AppSettings['reviewDifficulty']) {
+  return DIFFICULTY_OPTIONS.find(item => item.value === value)?.label || '보통';
+}
+
+function difficultyDesc(value: AppSettings['reviewDifficulty']) {
+  return DIFFICULTY_OPTIONS.find(item => item.value === value)?.desc || '복습 단어와 미완료 단어를 균형 있게 보여줘요.';
 }
 
 function GoalSlider({
@@ -117,8 +143,9 @@ export default function SettingsScreen() {
   const [settings, setSettings] = useState<AppSettings>(defaultSettings);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [showProfileEdit, setShowProfileEdit] = useState(false);
+  const [showReminderDropdown, setShowReminderDropdown] = useState(false);
   const [draftName, setDraftName] = useState(defaultSettings.profileName);
-  const [draftLoginLabel, setDraftLoginLabel] = useState(defaultSettings.loginLabel);
+  const [draftProfileImageUri, setDraftProfileImageUri] = useState(defaultSettings.profileImageUri);
 
   useFocusEffect(
     useCallback(() => {
@@ -135,6 +162,29 @@ export default function SettingsScreen() {
     setSettings({ ...saved });
   };
 
+  const handleLearningAlertChange = async (value: boolean) => {
+    if (!value) {
+      await updateSetting({ learningAlert: false });
+      return;
+    }
+
+    if (Platform.OS === 'web' && typeof window !== 'undefined' && 'Notification' in window) {
+      const permission = Notification.permission === 'default'
+        ? await Notification.requestPermission()
+        : Notification.permission;
+
+      if (permission !== 'granted') {
+        Alert.alert('알림 권한 필요', '브라우저 알림 권한을 허용해야 학습 알림을 받을 수 있어요.');
+        await updateSetting({ learningAlert: false });
+        return;
+      }
+    } else {
+      Alert.alert('알림 안내', '현재 학습 알림은 웹 브라우저 알림 기준으로 동작해요.');
+    }
+
+    await updateSetting({ learningAlert: true });
+  };
+
   const handleClearHistory = () => {
     setShowDeleteConfirm(true);
   };
@@ -146,18 +196,42 @@ export default function SettingsScreen() {
 
   const openProfileEdit = () => {
     setDraftName(settings.profileName);
-    setDraftLoginLabel(settings.loginLabel);
+    setDraftProfileImageUri(settings.profileImageUri);
     setShowProfileEdit(true);
   };
 
   const saveProfileEdit = async () => {
     const saved = await saveSettings({
       profileName: draftName.trim() || defaultSettings.profileName,
-      loginLabel: draftLoginLabel.trim() || defaultSettings.loginLabel,
+      profileImageUri: draftProfileImageUri,
     });
     setSettings({ ...saved });
     setShowProfileEdit(false);
   };
+  const pickProfileImage = () => {
+    if (Platform.OS !== 'web') {
+      Alert.alert('웹에서 사용 가능', '현재 프로필 사진 추가는 웹 실행 환경에서 사용할 수 있어요.');
+      return;
+    }
+
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = 'image/*';
+    input.onchange = () => {
+      const file = input.files?.[0];
+      if (!file) return;
+
+      const reader = new FileReader();
+      reader.onload = () => {
+        if (typeof reader.result === 'string') {
+          setDraftProfileImageUri(reader.result);
+        }
+      };
+      reader.readAsDataURL(file);
+    };
+    input.click();
+  };
+
 
   const dark = settings.themeMode === 'dark';
   const screenStyle = [styles.safe, dark && styles.safeDark];
@@ -176,10 +250,15 @@ export default function SettingsScreen() {
         </View>
 
         <View style={[styles.profileCard, cardTone]}>
-          <View style={styles.avatar}><Text style={styles.avatarText}>{settings.profileName.slice(0, 1).toUpperCase()}</Text></View>
+          <View style={styles.avatar}>
+            {settings.profileImageUri ? (
+              <Image source={{ uri: settings.profileImageUri }} style={styles.avatarImage} />
+            ) : (
+              <Text style={styles.avatarText}>{settings.profileName.slice(0, 1).toUpperCase()}</Text>
+            )}
+          </View>
           <View style={{ flex: 1 }}>
             <Text style={[styles.userName, textTone]}>{settings.profileName}</Text>
-            <Text style={[styles.userMeta, subTone]}>{settings.loginLabel}</Text>
           </View>
           <TouchableOpacity style={styles.editBtn} activeOpacity={0.85} onPress={openProfileEdit}>
             <Text style={styles.editText}>수정</Text>
@@ -237,11 +316,52 @@ export default function SettingsScreen() {
           <Divider />
           <SettingRow
             title="학습 알림"
-            desc="정해진 시간에 복습 알림을 보냅니다."
-            right={<Switch value={settings.learningAlert} onValueChange={(value) => updateSetting({ learningAlert: value })} trackColor={{ false: '#D7DFEA', true: '#B9DDFF' }} thumbColor={settings.learningAlert ? COLORS.primary : '#FFFFFF'} />}
+            desc={settings.learningAlert ? `${settings.learningReminderTime}에 브라우저 알림을 보냅니다.` : '정해진 시간에 복습 알림을 보냅니다.'}
+            right={<Switch value={settings.learningAlert} onValueChange={handleLearningAlertChange} trackColor={{ false: '#D7DFEA', true: '#B9DDFF' }} thumbColor={settings.learningAlert ? COLORS.primary : '#FFFFFF'} />}
           />
           <Divider />
-          <SettingRow title="복습 난이도" desc="자주 틀린 단어를 더 많이 보여줍니다." right={<Text style={styles.valueText}>보통</Text>} />
+          <SettingRow
+            title="알림 시간"
+            desc="누르면 시간 선택 목록이 열립니다."
+            right={
+              <View style={styles.dropdownValueWrap}>
+                <Text style={styles.valueText}>{settings.learningReminderTime}</Text>
+                <Text style={styles.dropdownArrow}>{showReminderDropdown ? '⌃' : '⌄'}</Text>
+              </View>
+            }
+            onPress={() => setShowReminderDropdown(open => !open)}
+          />
+          {showReminderDropdown ? (
+            <View style={[styles.dropdownPanel, dark && styles.dropdownPanelDark]}>
+              <Text style={[styles.dropdownTitle, dark && styles.textDark]}>알림 받을 시간을 선택하세요</Text>
+              <View style={styles.timeGrid}>
+                {REMINDER_TIMES.map(time => {
+                  const selected = settings.learningReminderTime === time;
+                  return (
+                    <TouchableOpacity
+                      key={time}
+                      style={[styles.timeOption, selected && styles.timeOptionSelected]}
+                      activeOpacity={0.85}
+                      onPress={async () => {
+                        await updateSetting({ learningReminderTime: time });
+                        setShowReminderDropdown(false);
+                      }}
+                    >
+                      <Text style={[styles.timeOptionText, selected && styles.timeOptionTextSelected]}>{time}</Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+              <Text style={[styles.dropdownHelp, dark && styles.subDark]}>브라우저가 켜져 있으면 선택한 시간에 학습 알림이 표시돼요.</Text>
+            </View>
+          ) : null}
+          <Divider />
+          <SettingRow
+            title="복습 난이도"
+            desc={difficultyDesc(settings.reviewDifficulty)}
+            right={<Text style={styles.valueText}>{difficultyLabel(settings.reviewDifficulty)}</Text>}
+            onPress={() => updateSetting({ reviewDifficulty: nextDifficulty(settings.reviewDifficulty) })}
+          />
         </Section>
 
         <Section title="개인정보">
@@ -272,21 +392,32 @@ export default function SettingsScreen() {
         <View style={styles.modalBackdrop}>
           <View style={[styles.confirmModal, cardTone]}>
             <Text style={[styles.confirmTitle, textTone]}>프로필 수정</Text>
-            <Text style={[styles.confirmDesc, subTone]}>설정 화면에 표시될 이름과 로그인 상태 문구를 수정할 수 있어요.</Text>
+            <Text style={[styles.confirmDesc, subTone]}>설정 화면에 표시될 이름과 프로필 사진을 수정할 수 있어요.</Text>
+            <View style={styles.photoEditWrap}>
+              <View style={styles.avatarLarge}>
+                {draftProfileImageUri ? (
+                  <Image source={{ uri: draftProfileImageUri }} style={styles.avatarLargeImage} />
+                ) : (
+                  <Text style={styles.avatarLargeText}>{(draftName || settings.profileName).slice(0, 1).toUpperCase()}</Text>
+                )}
+              </View>
+              <View style={styles.photoBtnRow}>
+                <TouchableOpacity style={styles.photoBtn} onPress={pickProfileImage} activeOpacity={0.85}>
+                  <Text style={styles.photoBtnText}>{draftProfileImageUri ? '사진 변경' : '사진 추가'}</Text>
+                </TouchableOpacity>
+                {draftProfileImageUri ? (
+                  <TouchableOpacity style={[styles.photoBtn, styles.photoRemoveBtn]} onPress={() => setDraftProfileImageUri('')} activeOpacity={0.85}>
+                    <Text style={styles.photoRemoveText}>삭제</Text>
+                  </TouchableOpacity>
+                ) : null}
+              </View>
+            </View>
             <Text style={[styles.inputLabel, textTone]}>이름</Text>
             <TextInput
               style={[styles.profileInput, dark && styles.profileInputDark]}
               value={draftName}
               onChangeText={setDraftName}
               placeholder="이름"
-              placeholderTextColor="#A7B0BE"
-            />
-            <Text style={[styles.inputLabel, textTone]}>로그인 표시 문구</Text>
-            <TextInput
-              style={[styles.profileInput, dark && styles.profileInputDark]}
-              value={draftLoginLabel}
-              onChangeText={setDraftLoginLabel}
-              placeholder="예: Gmail 계정으로 로그인됨"
               placeholderTextColor="#A7B0BE"
             />
             <View style={styles.confirmBtns}>
@@ -335,7 +466,8 @@ const styles = StyleSheet.create({
   title: { color: COLORS.text, fontSize: 29, fontWeight: '900', letterSpacing: -0.8 },
   subtitle: { marginTop: 6, color: COLORS.sub, fontSize: 15, fontWeight: '700', lineHeight: 22 },
   profileCard: { flexDirection: 'row', alignItems: 'center', gap: 14, backgroundColor: COLORS.card, borderRadius: 20, padding: 18, borderWidth: 1, borderColor: COLORS.line, marginBottom: 22 },
-  avatar: { width: 58, height: 58, borderRadius: 20, backgroundColor: COLORS.primary, alignItems: 'center', justifyContent: 'center' },
+  avatar: { width: 58, height: 58, borderRadius: 20, backgroundColor: COLORS.primary, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
+  avatarImage: { width: '100%', height: '100%' },
   avatarText: { color: '#FFFFFF', fontSize: 24, fontWeight: '900' },
   userName: { color: COLORS.text, fontSize: 18, fontWeight: '900' },
   userMeta: { color: COLORS.sub, fontSize: 13, fontWeight: '700', marginTop: 4 },
@@ -352,6 +484,17 @@ const styles = StyleSheet.create({
   divider: { height: 1, backgroundColor: COLORS.line, marginLeft: 16 },
   chevron: { color: '#B9C2CF', fontSize: 26, fontWeight: '500' },
   valueText: { color: COLORS.sub, fontSize: 13, fontWeight: '900' },
+  dropdownValueWrap: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  dropdownArrow: { color: COLORS.primary, fontSize: 18, fontWeight: '900', lineHeight: 20 },
+  dropdownPanel: { paddingHorizontal: 16, paddingTop: 4, paddingBottom: 16, backgroundColor: '#FFFFFF' },
+  dropdownPanelDark: { backgroundColor: '#172033' },
+  dropdownTitle: { color: COLORS.text, fontSize: 13, fontWeight: '900', marginBottom: 10 },
+  timeGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  timeOption: { minWidth: 78, height: 42, borderRadius: 999, backgroundColor: '#F2F7FD', borderWidth: 1, borderColor: COLORS.line, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 14 },
+  timeOptionSelected: { backgroundColor: COLORS.primary, borderColor: COLORS.primary },
+  timeOptionText: { color: COLORS.primary, fontSize: 14, fontWeight: '900' },
+  timeOptionTextSelected: { color: '#FFFFFF' },
+  dropdownHelp: { color: COLORS.sub, fontSize: 12, fontWeight: '700', lineHeight: 18, marginTop: 10 },
   sliderBlock: { gap: 8 },
   sliderTopRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   sliderLabel: { color: COLORS.sub, fontSize: 12, fontWeight: '800' },
@@ -377,6 +520,15 @@ const styles = StyleSheet.create({
   cancelBtn: { backgroundColor: '#F2F5F9', borderWidth: 1, borderColor: COLORS.line },
   deleteBtn: { backgroundColor: COLORS.danger },
   saveBtn: { backgroundColor: COLORS.primary },
+  photoEditWrap: { alignItems: 'center', marginTop: 18, marginBottom: 4, gap: 12 },
+  avatarLarge: { width: 96, height: 96, borderRadius: 32, backgroundColor: COLORS.primary, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
+  avatarLargeImage: { width: '100%', height: '100%' },
+  avatarLargeText: { color: '#FFFFFF', fontSize: 34, fontWeight: '900' },
+  photoBtnRow: { flexDirection: 'row', gap: 8 },
+  photoBtn: { height: 40, borderRadius: 999, paddingHorizontal: 16, alignItems: 'center', justifyContent: 'center', backgroundColor: '#E8F3FF', borderWidth: 1, borderColor: '#D7E9FF' },
+  photoBtnText: { color: COLORS.primary, fontSize: 13, fontWeight: '900' },
+  photoRemoveBtn: { backgroundColor: '#FFF0F3', borderColor: '#F8B8C4' },
+  photoRemoveText: { color: COLORS.danger, fontSize: 13, fontWeight: '900' },
   inputLabel: { color: COLORS.text, fontSize: 13, fontWeight: '900', marginTop: 16, marginBottom: 8 },
   profileInput: { height: 52, borderRadius: 15, borderWidth: 1, borderColor: COLORS.line, backgroundColor: '#F8FAFD', paddingHorizontal: 14, color: COLORS.text, fontSize: 15, fontWeight: '700' },
   profileInputDark: { backgroundColor: '#101827', borderColor: '#2B3A55', color: '#F8FAFC' },

@@ -3,7 +3,9 @@ import { View, Text, TextInput, TouchableOpacity,
          StyleSheet, KeyboardAvoidingView, Platform,
          ScrollView, Alert } from 'react-native';
 import { router } from 'expo-router';
-import { signup, setToken } from '@/src/api';
+import { setToken } from '@/src/api';
+import { registerLocalUser } from '@/src/store/authStore';
+import { saveSettings } from '@/src/store/settingsStore';
 
 export default function SignupScreen() {
   const [name,     setName]     = useState('');
@@ -12,19 +14,50 @@ export default function SignupScreen() {
   const [confirm,  setConfirm]  = useState('');
   const [agreed,   setAgreed]   = useState(false);
   const [loading,  setLoading]  = useState(false);
+  const [errorMessage, setErrorMessage] = useState('');
+  const [successMessage, setSuccessMessage] = useState('');
 
-  const isValid = name && email && password
+  const isValid = name.trim() && email.trim() && password.length >= 8
                   && password === confirm && agreed;
 
   const handleSignup = async () => {
-    if (!isValid) return;
+    setErrorMessage('');
+    setSuccessMessage('');
+
+    if (!name.trim()) {
+      setErrorMessage('이름을 입력해 주세요.');
+      return;
+    }
+    if (!email.trim()) {
+      setErrorMessage('이메일을 입력해 주세요.');
+      return;
+    }
+    if (!email.includes('@')) {
+      setErrorMessage('올바른 이메일 형식으로 입력해 주세요.');
+      return;
+    }
+    if (password.length < 8) {
+      setErrorMessage('비밀번호는 8자 이상 입력해 주세요.');
+      return;
+    }
+    if (password !== confirm) {
+      setErrorMessage('비밀번호가 일치하지 않아요.');
+      return;
+    }
+    if (!agreed) {
+      setErrorMessage('이용약관 및 개인정보처리방침에 동의해 주세요.');
+      return;
+    }
+
     setLoading(true);
     try {
-      const data = await signup(name, email, password);
-      setToken(data.access_token);
-      router.replace('/(auth)/onboarding');
+      const user = await registerLocalUser(name, email, password);
+      setToken(`local-${user.email}`);
+      await saveSettings({ profileName: user.name, loginLabel: `${user.email} 계정으로 로그인됨` });
+      setSuccessMessage('회원가입이 완료되었습니다. 로그인 화면으로 이동합니다.');
+      setTimeout(() => router.replace('/(auth)'), 800);
     } catch (e: any) {
-      Alert.alert('회원가입 실패', e.message);
+      setErrorMessage(e.message || '회원가입에 실패했어요. 다시 시도해 주세요.');
     } finally {
       setLoading(false);
     }
@@ -118,10 +151,21 @@ export default function SignupScreen() {
             </Text>
           </TouchableOpacity>
 
+          {errorMessage ? (
+            <View style={styles.errorBox}>
+              <Text style={styles.formErrorText}>{errorMessage}</Text>
+            </View>
+          ) : null}
+          {successMessage ? (
+            <View style={styles.successBox}>
+              <Text style={styles.successText}>{successMessage}</Text>
+            </View>
+          ) : null}
+
           <TouchableOpacity
-            style={[styles.signupBtn, (!isValid || loading) && styles.btnDisabled]}
+            style={[styles.signupBtn, loading && styles.btnDisabled]}
             onPress={handleSignup}
-            disabled={!isValid || loading}
+            disabled={loading}
           >
             <Text style={styles.signupBtnText}>
               {loading ? '가입 중...' : '가입하기'}
@@ -137,12 +181,12 @@ export default function SignupScreen() {
             <View style={styles.divider} />
           </View>
 
-          <TouchableOpacity style={styles.socialBtn} onPress={handleSignup}>
+          <TouchableOpacity style={styles.socialBtn} onPress={() => Alert.alert('준비 중', 'Google 회원가입은 추후 연동 예정이에요. 이메일로 가입해 주세요.')}>
             <Text style={styles.socialIcon}>G</Text>
             <Text style={styles.socialText}>Google로 가입하기</Text>
           </TouchableOpacity>
 
-          <TouchableOpacity style={[styles.socialBtn, styles.kakaoBtn]} onPress={handleSignup}>
+          <TouchableOpacity style={[styles.socialBtn, styles.kakaoBtn]} onPress={() => Alert.alert('준비 중', '카카오 회원가입은 추후 연동 예정이에요. 이메일로 가입해 주세요.')}>
             <Text style={styles.socialIcon}>K</Text>
             <Text style={styles.socialText}>카카오로 가입하기</Text>
           </TouchableOpacity>
@@ -177,6 +221,10 @@ const styles = StyleSheet.create({
                      borderWidth: 1, borderColor: '#e0e0e0' },
   inputError:      { borderColor: '#ef4444', backgroundColor: '#fff5f5' },
   errorText:       { fontSize: 12, color: '#ef4444', marginTop: 2 },
+  errorBox:        { backgroundColor: '#fff5f5', borderWidth: 1, borderColor: '#fecdd3', borderRadius: 14, paddingHorizontal: 14, paddingVertical: 12 },
+  formErrorText:   { color: '#dc2626', fontSize: 13, fontWeight: '800', lineHeight: 18 },
+  successBox:      { backgroundColor: '#ecfdf5', borderWidth: 1, borderColor: '#a7f3d0', borderRadius: 14, paddingHorizontal: 14, paddingVertical: 12 },
+  successText:     { color: '#047857', fontSize: 13, fontWeight: '900', lineHeight: 18 },
   agreeRow:        { flexDirection: 'row', alignItems: 'center', gap: 10 },
   checkbox:        { width: 22, height: 22, borderRadius: 6,
                      borderWidth: 2, borderColor: '#e0e0e0',
