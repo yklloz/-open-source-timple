@@ -9,6 +9,8 @@ export interface AppSettings {
   defaultTranslationMode: 'sign_to_text' | 'text_to_sign';
   dailyGoal: number;
   themeMode: 'light' | 'dark';
+  profileName: string;
+  loginLabel: string;
 }
 
 const SETTINGS_KEY = 'signbridge_settings_v1';
@@ -23,6 +25,8 @@ export const defaultSettings: AppSettings = {
   defaultTranslationMode: 'sign_to_text',
   dailyGoal: 90,
   themeMode: 'light',
+  profileName: 'Jay',
+  loginLabel: 'Gmail 계정으로 로그인됨',
 };
 
 let settingsState: AppSettings = defaultSettings;

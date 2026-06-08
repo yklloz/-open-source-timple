@@ -1,5 +1,5 @@
-import { useCallback, useState } from 'react';
-import { Modal, ScrollView, View, Text, TouchableOpacity, StyleSheet, Switch } from 'react-native';
+import { useCallback, useRef, useState } from 'react';
+import { Modal, ScrollView, View, Text, TextInput, TouchableOpacity, StyleSheet, Switch } from 'react-native';
 import { useFocusEffect } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -53,9 +53,72 @@ function Divider() {
   return <View style={styles.divider} />;
 }
 
+function GoalSlider({
+  value,
+  onChange,
+  dark = false,
+}: {
+  value: number;
+  onChange: (value: number) => void;
+  dark?: boolean;
+}) {
+  const trackRef = useRef<View>(null);
+  const [trackWidth, setTrackWidth] = useState(1);
+  const [trackPageX, setTrackPageX] = useState(0);
+  const min = 10;
+  const max = 100;
+  const percent = ((value - min) / (max - min)) * 100;
+
+  const rememberTrackPosition = () => {
+    trackRef.current?.measure((_x, _y, width, _height, pageX) => {
+      setTrackWidth(Math.max(1, width));
+      setTrackPageX(pageX);
+    });
+  };
+
+  const updateFromX = (locationX?: number, pageX?: number) => {
+    const x = typeof locationX === 'number' ? locationX : (typeof pageX === 'number' ? pageX - trackPageX : 0);
+    const ratio = Math.max(0, Math.min(1, x / trackWidth));
+    const next = Math.round(min + ratio * (max - min));
+    onChange(next);
+  };
+
+  return (
+    <View style={styles.sliderBlock}>
+      <View style={styles.sliderTopRow}>
+        <Text style={[styles.sliderLabel, dark && styles.subDark]}>10점</Text>
+        <Text style={styles.sliderValue}>{value}점</Text>
+        <Text style={[styles.sliderLabel, dark && styles.subDark]}>100점</Text>
+      </View>
+      <View
+        ref={trackRef}
+        style={[styles.sliderTrack, dark && styles.sliderTrackDark]}
+        onLayout={(event) => {
+          setTrackWidth(Math.max(1, event.nativeEvent.layout.width));
+          requestAnimationFrame(rememberTrackPosition);
+        }}
+        onStartShouldSetResponder={() => true}
+        onMoveShouldSetResponder={() => true}
+        onResponderGrant={(event) => {
+          rememberTrackPosition();
+          updateFromX(event.nativeEvent.locationX, event.nativeEvent.pageX);
+        }}
+        onResponderMove={(event) => updateFromX(event.nativeEvent.locationX, event.nativeEvent.pageX)}
+      >
+        <View style={[styles.sliderFill, { width: `${percent}%` }]} />
+        <View style={[styles.sliderThumb, { left: `${percent}%` }]} />
+      </View>
+      <Text style={[styles.sliderHelp, dark && styles.subDark]}>막대를 누른 채 좌우로 움직여 오늘의 목표 점수를 조정하세요.</Text>
+    </View>
+  );
+}
+
 export default function SettingsScreen() {
   const [settings, setSettings] = useState<AppSettings>(defaultSettings);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [showProfileEdit, setShowProfileEdit] = useState(false);
+  const [draftName, setDraftName] = useState(defaultSettings.profileName);
+  const [draftLoginLabel, setDraftLoginLabel] = useState(defaultSettings.loginLabel);
 
   useFocusEffect(
     useCallback(() => {
@@ -81,6 +144,21 @@ export default function SettingsScreen() {
     setShowDeleteConfirm(false);
   };
 
+  const openProfileEdit = () => {
+    setDraftName(settings.profileName);
+    setDraftLoginLabel(settings.loginLabel);
+    setShowProfileEdit(true);
+  };
+
+  const saveProfileEdit = async () => {
+    const saved = await saveSettings({
+      profileName: draftName.trim() || defaultSettings.profileName,
+      loginLabel: draftLoginLabel.trim() || defaultSettings.loginLabel,
+    });
+    setSettings({ ...saved });
+    setShowProfileEdit(false);
+  };
+
   const dark = settings.themeMode === 'dark';
   const screenStyle = [styles.safe, dark && styles.safeDark];
   const cardTone = dark ? styles.cardDark : undefined;
@@ -98,12 +176,12 @@ export default function SettingsScreen() {
         </View>
 
         <View style={[styles.profileCard, cardTone]}>
-          <View style={styles.avatar}><Text style={styles.avatarText}>J</Text></View>
+          <View style={styles.avatar}><Text style={styles.avatarText}>{settings.profileName.slice(0, 1).toUpperCase()}</Text></View>
           <View style={{ flex: 1 }}>
-            <Text style={[styles.userName, textTone]}>Jay</Text>
-            <Text style={[styles.userMeta, subTone]}>Gmail 계정으로 로그인됨</Text>
+            <Text style={[styles.userName, textTone]}>{settings.profileName}</Text>
+            <Text style={[styles.userMeta, subTone]}>{settings.loginLabel}</Text>
           </View>
-          <TouchableOpacity style={styles.editBtn} activeOpacity={0.85}>
+          <TouchableOpacity style={styles.editBtn} activeOpacity={0.85} onPress={openProfileEdit}>
             <Text style={styles.editText}>수정</Text>
           </TouchableOpacity>
         </View>
@@ -149,7 +227,13 @@ export default function SettingsScreen() {
         </Section>
 
         <Section title="학습 설정">
-          <SettingRow title="일일 목표" desc="매일 학습할 퀴즈 목표 점수" right={<Text style={styles.valueText}>{settings.dailyGoal}점</Text>} onPress={() => updateSetting({ dailyGoal: settings.dailyGoal === 90 ? 80 : 90 })} />
+          <View style={styles.goalRow}>
+            <View style={styles.rowTextWrap}>
+              <Text style={[styles.rowTitle, dark && styles.textDark]}>일일 목표</Text>
+              <Text style={[styles.rowDesc, dark && styles.subDark]}>매일 학습할 퀴즈 목표 점수</Text>
+            </View>
+            <GoalSlider value={settings.dailyGoal} onChange={(dailyGoal) => updateSetting({ dailyGoal })} dark={dark} />
+          </View>
           <Divider />
           <SettingRow
             title="학습 알림"
@@ -178,6 +262,44 @@ export default function SettingsScreen() {
           <SettingRow title="로그아웃" danger />
         </Section>
       </ScrollView>
+
+      <Modal
+        transparent
+        visible={showProfileEdit}
+        animationType="fade"
+        onRequestClose={() => setShowProfileEdit(false)}
+      >
+        <View style={styles.modalBackdrop}>
+          <View style={[styles.confirmModal, cardTone]}>
+            <Text style={[styles.confirmTitle, textTone]}>프로필 수정</Text>
+            <Text style={[styles.confirmDesc, subTone]}>설정 화면에 표시될 이름과 로그인 상태 문구를 수정할 수 있어요.</Text>
+            <Text style={[styles.inputLabel, textTone]}>이름</Text>
+            <TextInput
+              style={[styles.profileInput, dark && styles.profileInputDark]}
+              value={draftName}
+              onChangeText={setDraftName}
+              placeholder="이름"
+              placeholderTextColor="#A7B0BE"
+            />
+            <Text style={[styles.inputLabel, textTone]}>로그인 표시 문구</Text>
+            <TextInput
+              style={[styles.profileInput, dark && styles.profileInputDark]}
+              value={draftLoginLabel}
+              onChangeText={setDraftLoginLabel}
+              placeholder="예: Gmail 계정으로 로그인됨"
+              placeholderTextColor="#A7B0BE"
+            />
+            <View style={styles.confirmBtns}>
+              <TouchableOpacity style={[styles.confirmBtn, styles.cancelBtn]} onPress={() => setShowProfileEdit(false)} activeOpacity={0.85}>
+                <Text style={styles.cancelText}>취소</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={[styles.confirmBtn, styles.saveBtn]} onPress={saveProfileEdit} activeOpacity={0.85}>
+                <Text style={styles.deleteText}>저장</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
 
       <Modal
         transparent
@@ -223,12 +345,22 @@ const styles = StyleSheet.create({
   sectionTitle: { color: COLORS.text, fontSize: 17, fontWeight: '900', marginBottom: 10 },
   card: { backgroundColor: COLORS.card, borderRadius: 18, borderWidth: 1, borderColor: COLORS.line, overflow: 'hidden' },
   row: { minHeight: 66, paddingHorizontal: 16, paddingVertical: 13, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 14 },
+  goalRow: { paddingHorizontal: 16, paddingVertical: 16, gap: 14 },
   rowTextWrap: { flex: 1 },
   rowTitle: { color: COLORS.text, fontSize: 15, fontWeight: '900' },
   rowDesc: { color: COLORS.sub, fontSize: 12, fontWeight: '700', lineHeight: 18, marginTop: 4 },
   divider: { height: 1, backgroundColor: COLORS.line, marginLeft: 16 },
   chevron: { color: '#B9C2CF', fontSize: 26, fontWeight: '500' },
   valueText: { color: COLORS.sub, fontSize: 13, fontWeight: '900' },
+  sliderBlock: { gap: 8 },
+  sliderTopRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  sliderLabel: { color: COLORS.sub, fontSize: 12, fontWeight: '800' },
+  sliderValue: { color: COLORS.primary, fontSize: 18, fontWeight: '900' },
+  sliderTrack: { height: 18, borderRadius: 999, backgroundColor: '#DDEAF8', justifyContent: 'center', overflow: 'visible' },
+  sliderTrackDark: { backgroundColor: '#2B3A55' },
+  sliderFill: { position: 'absolute', left: 0, height: '100%', borderRadius: 999, backgroundColor: COLORS.primary },
+  sliderThumb: { position: 'absolute', width: 30, height: 30, borderRadius: 15, marginLeft: -15, backgroundColor: '#FFFFFF', borderWidth: 4, borderColor: COLORS.primary, shadowColor: '#000', shadowOpacity: .18, shadowRadius: 8, shadowOffset: { width: 0, height: 4 }, elevation: 6 },
+  sliderHelp: { color: COLORS.sub, fontSize: 12, fontWeight: '700', lineHeight: 18 },
   statusOk: { color: COLORS.cyan, fontSize: 13, fontWeight: '900' },
   statusDemo: { color: COLORS.primary, fontSize: 13, fontWeight: '900' },
   dangerText: { color: COLORS.danger },
@@ -244,6 +376,10 @@ const styles = StyleSheet.create({
   confirmBtn: { flex: 1, height: 52, borderRadius: 999, alignItems: 'center', justifyContent: 'center' },
   cancelBtn: { backgroundColor: '#F2F5F9', borderWidth: 1, borderColor: COLORS.line },
   deleteBtn: { backgroundColor: COLORS.danger },
+  saveBtn: { backgroundColor: COLORS.primary },
+  inputLabel: { color: COLORS.text, fontSize: 13, fontWeight: '900', marginTop: 16, marginBottom: 8 },
+  profileInput: { height: 52, borderRadius: 15, borderWidth: 1, borderColor: COLORS.line, backgroundColor: '#F8FAFD', paddingHorizontal: 14, color: COLORS.text, fontSize: 15, fontWeight: '700' },
+  profileInputDark: { backgroundColor: '#101827', borderColor: '#2B3A55', color: '#F8FAFC' },
   cancelText: { color: COLORS.sub, fontSize: 15, fontWeight: '900' },
   deleteText: { color: '#FFFFFF', fontSize: 15, fontWeight: '900' },
 });

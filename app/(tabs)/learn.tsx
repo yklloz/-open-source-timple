@@ -91,7 +91,7 @@ export default function LearnHomeScreen() {
         <View style={styles.bgCircle} />
         <View style={styles.header}>
           <View>
-            <Text style={[styles.hello, dark && styles.textDark]}>Hello! Jay</Text>
+            <Text style={[styles.hello, dark && styles.textDark]}>Hello! {settings.profileName}</Text>
             <Text style={[styles.sub, dark && styles.textDark]}>{completedCount > 0 ? '학습 기록이 쌓이고 있어요!' : '새로운 학습이 있어요!'}</Text>
             <View style={styles.points}><Text style={styles.pointsText}>{progress.xp} Points</Text></View>
           </View>
