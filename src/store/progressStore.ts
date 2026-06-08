@@ -1,41 +1,54 @@
-import { createContext, useContext, useState } from 'react';
-
-// 나중에 zustand 대신 Context API로 대체
-// 웹 호환성 문제 없음
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 export interface ProgressState {
-  hasOnboarded:     boolean;
-  xp:               number;
-  streak:           number;
+  xp: number;
+  streak: number;
   completedLessons: string[];
+  scores: Record<string, number>;
 }
 
-// 전역 상태 (간단하게 모듈 레벨 변수로)
-let state: ProgressState = {
-  hasOnboarded:     false,
-  xp:               0,
-  streak:           0,
+const KEY = 'signbridge_progress_v1';
+
+const initialState: ProgressState = {
+  xp: 90,
+  streak: 3,
   completedLessons: [],
+  scores: {},
 };
+
+let state: ProgressState = initialState;
 
 export function getProgress() {
   return state;
 }
 
-export function finishOnboarding() {
-  state = { ...state, hasOnboarded: true };
+export async function loadProgress() {
+  try {
+    const raw = await AsyncStorage.getItem(KEY);
+    if (raw) state = { ...initialState, ...JSON.parse(raw) };
+  } catch {
+    state = initialState;
+  }
+  return state;
 }
 
-export function completeLesson(lessonId: string, earnedXP: number) {
-  if (state.completedLessons.includes(lessonId)) return;
-  state = {
+export async function saveProgress(next: ProgressState) {
+  state = next;
+  await AsyncStorage.setItem(KEY, JSON.stringify(state));
+  return state;
+}
+
+export async function completeLesson(lessonId: string, earnedXP: number, score: number) {
+  const alreadyDone = state.completedLessons.includes(lessonId);
+  const next: ProgressState = {
     ...state,
-    xp:               state.xp + earnedXP,
-    completedLessons: [...state.completedLessons, lessonId],
+    xp: alreadyDone ? state.xp : state.xp + earnedXP,
+    completedLessons: alreadyDone ? state.completedLessons : [...state.completedLessons, lessonId],
+    scores: { ...state.scores, [lessonId]: Math.max(score, state.scores[lessonId] || 0) },
   };
+  return saveProgress(next);
 }
 
-// zustand처럼 쓸 수 있는 훅 (간단 버전)
-export function useProgressStore<T>(selector: (s: ProgressState) => T): T {
-  return selector(state);
+export async function resetProgress() {
+  return saveProgress(initialState);
 }
