@@ -1,1 +1,1 @@
-npx expo start -c —web
+npx expo start -c --web
