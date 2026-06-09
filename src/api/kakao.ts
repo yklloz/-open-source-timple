@@ -9,6 +9,8 @@ WebBrowser.maybeCompleteAuthSession();
 const LOCAL_BASE_URL = 'http://127.0.0.1:8001';
 const BASE_URL = process.env.EXPO_PUBLIC_API_URL || LOCAL_BASE_URL;
 
+export const KAKAO_AUTH_STORAGE_KEY = 'son_tong_haeyo_kakao_auth_result_v1';
+
 type KakaoConfig = {
   ready: boolean;
   client_secret_required: boolean;
@@ -21,6 +23,21 @@ function getQueryParam(url: string, key: string) {
   const query = url.includes('?') ? url.split('?')[1].split('#')[0] : '';
   const params = new URLSearchParams(query);
   return params.get(key);
+}
+
+function readStoredAuthResult(): AuthResponse | null {
+  if (Platform.OS !== 'web' || typeof window === 'undefined') return null;
+
+  const raw = localStorage.getItem(KAKAO_AUTH_STORAGE_KEY);
+  if (!raw) return null;
+  localStorage.removeItem(KAKAO_AUTH_STORAGE_KEY);
+
+  const parsed = JSON.parse(raw);
+  if (parsed.type === 'error') {
+    throw new Error(parsed.message || 'Kakao login failed.');
+  }
+
+  return parsed.data as AuthResponse;
 }
 
 export function getKakaoReturnUri() {
@@ -58,9 +75,15 @@ export async function loginWithKakao(): Promise<AuthResponse> {
     return_uri: returnUri,
   }).toString()}`;
 
+  if (Platform.OS === 'web' && typeof window !== 'undefined') {
+    localStorage.removeItem(KAKAO_AUTH_STORAGE_KEY);
+  }
+
   const authResult = await WebBrowser.openAuthSessionAsync(authUrl, returnUri);
 
   if (authResult.type !== 'success') {
+    const stored = readStoredAuthResult();
+    if (stored) return stored;
     throw new Error('Kakao login was cancelled.');
   }
 
@@ -76,6 +99,8 @@ export async function loginWithKakao(): Promise<AuthResponse> {
   const email = getQueryParam(authResult.url, 'email') || '';
 
   if (!accessToken || !userId) {
+    const stored = readStoredAuthResult();
+    if (stored) return stored;
     throw new Error('The backend did not return a valid app token.');
   }
 

@@ -24,7 +24,9 @@ export default function LoginScreen() {
       });
       router.replace('/(tabs)/learn');
     } catch (e: any) {
-      Alert.alert('카카오 로그인 실패', e.message || '다시 시도해 주세요.');
+      const message = e.message || '다시 시도해 주세요.';
+      setErrorMessage(message);
+      Alert.alert('카카오 로그인 실패', message);
     } finally {
       setLoading(false);
     }
