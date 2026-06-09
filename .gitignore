@@ -46,3 +46,7 @@ yarn-error.*
 backend/.env.example
 __pycache__/
 *.pyc
+backend/.env
+backend/.venv/
+backend/*.db
+backend/__pycache__/

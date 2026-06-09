@@ -1,9 +1,8 @@
 import { useState } from 'react';
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, KeyboardAvoidingView, Platform, Alert } from 'react-native';
 import { router } from 'expo-router';
-import { setToken } from '@/src/api';
+import { login, setToken } from '@/src/api';
 import { loginWithKakao } from '@/src/api/kakao';
-import { loginLocalUser } from '@/src/store/authStore';
 import { saveSettings } from '@/src/store/settingsStore';
 
 const COLORS = { primary: '#1E88F5', bg: '#F3F8FE', card: '#FFFFFF', text: '#20242A', sub: '#748092', line: '#E7EEF8', kakao: '#FEE500' };
@@ -14,16 +13,15 @@ export default function LoginScreen() {
   const [loading, setLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
 
-  const enterDemo = () => router.replace('/(tabs)/learn');
-
   const handleKakaoLogin = async () => {
     setLoading(true);
     try {
       const result = await loginWithKakao();
-
-      // TODO: 백엔드가 준비되면 kakaoAccessToken을 서버로 보내서
-      // 우리 서비스 JWT로 교환하는 방식으로 바꾸면 됩니다.
-      setToken(result.kakaoAccessToken);
+      await setToken(result.access_token);
+      await saveSettings({
+        profileName: result.name,
+        loginLabel: result.email ? `${result.email} 계정으로 로그인됨` : 'Kakao 계정으로 로그인됨',
+      });
       router.replace('/(tabs)/learn');
     } catch (e: any) {
       Alert.alert('카카오 로그인 실패', e.message || '다시 시도해 주세요.');
@@ -43,12 +41,12 @@ export default function LoginScreen() {
 
     setLoading(true);
     try {
-      const user = await loginLocalUser(email, password);
-      setToken(`local-${user.email}`);
-      await saveSettings({ profileName: user.name, loginLabel: `${user.email} 계정으로 로그인됨` });
+      const data = await login(email, password);
+      await setToken(data.access_token);
+      await saveSettings({ profileName: data.name, loginLabel: `${data.email} 계정으로 로그인됨` });
       router.replace('/(tabs)/learn');
     } catch (e: any) {
-      const message = e.message || '회원가입한 계정만 로그인할 수 있어요.';
+      const message = e.message || '등록되지 않은 계정입니다.';
       setErrorMessage(message);
       Alert.alert('로그인 실패', message);
     } finally {
@@ -61,7 +59,7 @@ export default function LoginScreen() {
       <View style={styles.circle} />
       <View style={styles.header}>
         <View style={styles.logo}><Text style={styles.logoText}>S</Text></View>
-        <Text style={styles.title}>SignBridge</Text>
+        <Text style={styles.title}>손통해요</Text>
         <Text style={styles.subtitle}>수어 학습과 실시간 소통을 시작하세요</Text>
       </View>
 

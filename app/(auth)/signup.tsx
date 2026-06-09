@@ -3,8 +3,7 @@ import { View, Text, TextInput, TouchableOpacity,
          StyleSheet, KeyboardAvoidingView, Platform,
          ScrollView, Alert } from 'react-native';
 import { router } from 'expo-router';
-import { setToken } from '@/src/api';
-import { registerLocalUser } from '@/src/store/authStore';
+import { signup, setToken } from '@/src/api';
 import { saveSettings } from '@/src/store/settingsStore';
 
 export default function SignupScreen() {
@@ -51,9 +50,9 @@ export default function SignupScreen() {
 
     setLoading(true);
     try {
-      const user = await registerLocalUser(name, email, password);
-      setToken(`local-${user.email}`);
-      await saveSettings({ profileName: user.name, loginLabel: `${user.email} 계정으로 로그인됨` });
+      const data = await signup(name, email, password);
+      await setToken(data.access_token);
+      await saveSettings({ profileName: data.name, loginLabel: `${data.email} 계정으로 로그인됨` });
       setSuccessMessage('회원가입이 완료되었습니다. 로그인 화면으로 이동합니다.');
       setTimeout(() => router.replace('/(auth)'), 800);
     } catch (e: any) {
@@ -81,7 +80,7 @@ export default function SignupScreen() {
 
         <View style={styles.titleWrap}>
           <Text style={styles.title}>회원가입</Text>
-          <Text style={styles.sub}>손이음과 함께 수어를 배워요 🤟</Text>
+          <Text style={styles.sub}>손통해요와 함께 수어를 배워요</Text>
         </View>
 
         <View style={styles.form}>
