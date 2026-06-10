@@ -8,6 +8,7 @@ WebBrowser.maybeCompleteAuthSession();
 
 const LOCAL_BASE_URL = 'http://127.0.0.1:8001';
 const BASE_URL = process.env.EXPO_PUBLIC_API_URL || LOCAL_BASE_URL;
+const NGROK_SKIP_WARNING_HEADER = { 'ngrok-skip-browser-warning': 'true' };
 
 export const KAKAO_AUTH_STORAGE_KEY = 'son_tong_haeyo_kakao_auth_result_v1';
 
@@ -54,7 +55,9 @@ export function getKakaoReturnUri() {
 export async function loginWithKakao(): Promise<AuthResponse> {
   let config: KakaoConfig;
   try {
-    const configResponse = await fetch(`${BASE_URL}/auth/kakao/config`);
+    const configResponse = await fetch(`${BASE_URL}/auth/kakao/config`, {
+      headers: NGROK_SKIP_WARNING_HEADER,
+    });
     config = await configResponse.json();
   } catch {
     throw new Error(`Cannot connect to the backend server (${BASE_URL}).`);

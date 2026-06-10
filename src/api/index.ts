@@ -4,6 +4,7 @@ import { Platform } from 'react-native';
 const TOKEN_KEY = 'auth_token';
 const LOCAL_BASE_URL = 'http://127.0.0.1:8001';
 const BASE_URL = process.env.EXPO_PUBLIC_API_URL || LOCAL_BASE_URL;
+const NGROK_SKIP_WARNING_HEADER = { 'ngrok-skip-browser-warning': 'true' };
 
 export type AuthResponse = {
   access_token: string;
@@ -26,7 +27,13 @@ async function requestJson<T>(path: string, options: RequestInit, fallback: stri
   let res: Response;
 
   try {
-    res = await fetch(`${BASE_URL}${path}`, options);
+    res = await fetch(`${BASE_URL}${path}`, {
+      ...options,
+      headers: {
+        ...NGROK_SKIP_WARNING_HEADER,
+        ...(options.headers || {}),
+      },
+    });
   } catch {
     throw new Error(`Cannot connect to the backend server (${BASE_URL}).`);
   }
